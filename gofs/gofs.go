@@ -3,6 +3,7 @@ package gofs
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/ahdekkers/go-zipdir/zipdir"
 	"github.com/gin-gonic/gin"
@@ -238,6 +239,16 @@ func createLogWriter(level, logFile string) (hclog.Logger, error) {
 }
 
 func checkIsDir(dir string) error {
-	_, err := os.ReadDir(dir)
+	inf, err := os.Stat(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		err = os.MkdirAll(dir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create dir '%s': %v", dir, err)
+		}
+	} else if err == nil {
+		if !inf.IsDir() {
+			return fmt.Errorf("rootDir '%s' is not directory", dir)
+		}
+	}
 	return err
 }
