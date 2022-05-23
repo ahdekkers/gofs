@@ -72,9 +72,9 @@ func Create(opts Opts) error {
 func (s *Server) listenForRequests() error {
 	router := gin.Default()
 
-	router.Handle("GET", "/*addr", s.getFile)
-	router.Handle("GET", "/available-entries/:path", s.getEntries)
-	router.Handle("POST", "/*addr", s.uploadFile)
+	router.Handle("GET", "/entries/*addr", s.getEntries)
+	router.Handle("GET", "/content/*addr", s.getFile)
+	router.Handle("POST", "/content/*addr", s.uploadFile)
 
 	return router.Run(s.addr)
 }
@@ -172,7 +172,7 @@ func (s *Server) uploadFile(ctx *gin.Context) {
 }
 
 func (s *Server) getEntries(ctx *gin.Context) {
-	relativePath := ctx.Param("path")
+	relativePath := ctx.Param("addr")
 	path := filepath.Join(s.rootDir, relativePath)
 	entries, err := os.ReadDir(path)
 	if err != nil {
