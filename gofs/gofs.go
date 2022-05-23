@@ -73,6 +73,7 @@ func (s *Server) listenForRequests() error {
 	router := gin.Default()
 
 	router.Handle("GET", "/*addr", s.getFile)
+	router.Handle("GET", "/available-entries/:path", s.getEntries)
 	router.Handle("POST", "/*addr", s.uploadFile)
 
 	return router.Run(s.addr)
@@ -168,6 +169,26 @@ func (s *Server) uploadFile(ctx *gin.Context) {
 
 	s.logger.Info("File data successfully uploaded", "path", path)
 	ctx.String(http.StatusOK, "Successfully wrote data to '%s'", path)
+}
+
+func (s *Server) getEntries(ctx *gin.Context) {
+	relativePath := ctx.Param("path")
+	path := filepath.Join(s.rootDir, relativePath)
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		s.logger.Warn("Failed to get entries in directory", "error", err, "dirPath", path)
+		ctx.String(http.StatusBadRequest, "Failed to read directory '%s': %v", path, err)
+		return
+	}
+
+	var entryNames []string
+	for _, entry := range entries {
+		entryNames = append(entryNames, entry.Name())
+	}
+
+	respString := strings.Join(entryNames, ",")
+	s.logger.Info("Successfully processed entries request", "entries", respString)
+	ctx.String(http.StatusOK, respString)
 }
 
 func unzipToDir(dir string, zipData []byte) error {
