@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type logWriter struct {
@@ -136,6 +137,14 @@ func (s *Server) uploadFile(ctx *gin.Context) {
 			ctx.String(http.StatusBadRequest, err.Error())
 		}
 	} else {
+		dir := path[:strings.LastIndex(path, "/")]
+		err = os.MkdirAll(dir, os.ModePerm)
+		if err != nil {
+			s.logger.Warn("Failed to create dirs", "error", err, "dirs", dir)
+			ctx.String(http.StatusBadRequest, "Failed to make dirs '%s': %v", dir, err)
+			return
+		}
+
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_TRUNC, os.ModePerm)
 		if err != nil {
 			if file != nil {
@@ -185,6 +194,11 @@ func unzipToDir(dir string, zipData []byte) error {
 	}
 
 	for _, file := range files {
+		err = os.MkdirAll(dir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to make dirs '%s': %v", dir, err)
+		}
+
 		path := filepath.Join(dir, file.Name)
 		outFile, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.ModePerm)
 		if err != nil {
@@ -203,9 +217,15 @@ func unzipToDir(dir string, zipData []byte) error {
 }
 
 func createLogWriter(level, logFile string) (hclog.Logger, error) {
+	dir := logFile[:strings.LastIndex(logFile, "/")]
+	err := os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make dirs '%s': %v", dir, err)
+	}
+
 	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open file '%s': %v", logFile, err)
 	}
 
 	return hclog.New(&hclog.LoggerOptions{
