@@ -4,6 +4,7 @@ import (
 	"github.com/ahdekkers/gofs/gofs"
 	"github.com/spf13/cobra"
 	"log"
+	"net/http"
 )
 
 func main() {
@@ -13,9 +14,13 @@ func main() {
 		Short: "gofs -p 9092 -addr localhost -rootDir /home/me/serverRoot/ -level DEBUG -logFile /home/me/serverLog.txt",
 		Long:  "gofs is a simple http file server, written in Go.",
 		Run: func(cmd *cobra.Command, args []string) {
-			err := gofs.Create(opts)
+			server, err := gofs.Create(opts)
 			if err != nil {
-				cmd.Printf("Error while running gofs: %v\n", err)
+				cmd.Printf("Error while creating gofs server: %v\n", err)
+			}
+
+			if err := server.Run(); err != nil && err != http.ErrServerClosed {
+				cmd.Printf("Error while starting gofs server: %v", err)
 			}
 		},
 	}

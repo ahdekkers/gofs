@@ -3,12 +3,14 @@ package gofs
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/ahdekkers/go-zipdir/zipdir"
 	"github.com/gin-gonic/gin"
 	"github.com/hashicorp/go-hclog"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,45 +40,64 @@ type Opts struct {
 }
 
 type Server struct {
-	addr    string
+	srv     *http.Server
 	rootDir string
 	logger  hclog.Logger
+	stopCh  chan int
 }
 
 /*
-Create a file server instance. This call will block until an error is thrown or interrupted
+Create a file server instance.
 */
-func Create(opts Opts) error {
+func Create(opts Opts) (*Server, error) {
 	logger, err := createLogWriter(opts.LogLevel, opts.LogFile)
 	if err != nil {
-		return fmt.Errorf("failed to create logger: %v", err)
+		return nil, fmt.Errorf("failed to create logger: %v", err)
 	}
 
 	err = checkIsDir(opts.RootDir)
 	if err != nil {
-		return fmt.Errorf("failed to read root dir: %v", err)
+		return nil, fmt.Errorf("failed to read root dir: %v", err)
 	}
 
 	server := &Server{
-		addr:    fmt.Sprintf("%s:%d", opts.Addr, opts.Port),
 		rootDir: opts.RootDir,
 		logger:  logger,
+		stopCh:  make(chan int),
 	}
-	err = server.listenForRequests()
-	if err != nil {
 
+	router := gin.Default()
+	router.Handle("GET", "/entries/*addr", server.getEntries)
+	router.Handle("GET", "/content/*addr", server.getFile)
+	router.Handle("POST", "/content/*addr", server.uploadFile)
+
+	server.srv = &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", opts.Addr, opts.Port),
+		Handler: router,
 	}
-	return err
+	return server, nil
 }
 
-func (s *Server) listenForRequests() error {
-	router := gin.Default()
+/*
+Start listening for requests. This call is non-blocking
+*/
+func (s *Server) Start() {
+	go func() {
+		if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Error while starting http file server: %v", err)
+		}
+	}()
+}
 
-	router.Handle("GET", "/entries/*addr", s.getEntries)
-	router.Handle("GET", "/content/*addr", s.getFile)
-	router.Handle("POST", "/content/*addr", s.uploadFile)
+func (s *Server) Run() error {
+	return s.srv.ListenAndServe()
+}
 
-	return router.Run(s.addr)
+func (s *Server) Stop() error {
+	if err := s.srv.Shutdown(context.Background()); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Server) getFile(ctx *gin.Context) {
