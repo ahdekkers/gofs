@@ -102,6 +102,10 @@ func (s *Server) Stop() error {
 	return nil
 }
 
+func (s *Server) GetAddr() string {
+	return s.srv.Addr
+}
+
 func (s *Server) getFile(ctx *gin.Context) {
 	fileAddr := ctx.Param("addr")
 	path := filepath.Join(s.rootDir, fileAddr)
