@@ -27,7 +27,9 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 		return
 	}
 
-	n, err = w.file.Write(p)
+	if w.file != nil {
+		n, err = w.file.Write(p)
+	}
 	return
 }
 
@@ -260,15 +262,18 @@ func unzipToDir(dir string, zipData []byte) error {
 }
 
 func createLogWriter(level, logFile string) (hclog.Logger, error) {
-	dir := logFile[:strings.LastIndex(logFile, "/")]
-	err := os.MkdirAll(dir, os.ModePerm)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make dirs '%s': %v", dir, err)
-	}
+	var file *os.File
+	if logFile != "" {
+		dir := logFile[:strings.LastIndex(logFile, "/")]
+		err := os.MkdirAll(dir, os.ModePerm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to make dirs '%s': %v", dir, err)
+		}
 
-	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file '%s': %v", logFile, err)
+		file, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open file '%s': %v", logFile, err)
+		}
 	}
 
 	return hclog.New(&hclog.LoggerOptions{
