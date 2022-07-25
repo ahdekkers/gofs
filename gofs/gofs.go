@@ -1,8 +1,6 @@
 package gofs
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -160,7 +158,7 @@ func (s *Server) uploadFile(ctx *gin.Context) {
 	}
 
 	if contentType == "application/zip" {
-		err = unzipToDir(path, reqData)
+		err = zipdir.UnzipToDir(path, reqData)
 		if err != nil {
 			s.logger.Warn("Failed to unzip upload file request data", "error", err)
 			ctx.String(http.StatusBadRequest, err.Error())
@@ -216,53 +214,6 @@ func (s *Server) getEntries(ctx *gin.Context) {
 	respString := strings.Join(entryNames, ",")
 	s.logger.Info("Successfully processed entries request", "entries", respString)
 	ctx.String(http.StatusOK, respString)
-}
-
-func unzipToDir(dir string, zipData []byte) error {
-	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
-	if err != nil {
-		return fmt.Errorf("Failed to read zip data: %v", err)
-	}
-
-	var files []File
-	for _, file := range zipReader.File {
-		fileReader, err := file.Open()
-		if err != nil {
-			return fmt.Errorf("Failed to unzip file '%s': %v", file.Name, err)
-		}
-
-		data, err := ioutil.ReadAll(fileReader)
-		fileReader.Close()
-		if err != nil {
-			return fmt.Errorf("Failed to read file data for file '%s': %v", file.Name, err)
-		}
-		files = append(files, File{
-			Name: file.Name,
-			Data: data,
-		})
-	}
-
-	for _, file := range files {
-		err = os.MkdirAll(dir, os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("failed to make dirs '%s': %v", dir, err)
-		}
-
-		path := filepath.Join(dir, file.Name)
-		outFile, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.ModePerm)
-		if err != nil {
-			if outFile != nil {
-				outFile.Close()
-			}
-			return fmt.Errorf("Failed to open or create file '%s': %v", path, err)
-		}
-
-		_, err = outFile.Write(file.Data)
-		if err != nil {
-			return fmt.Errorf("Failed to write data to file '%s': %v", path, err)
-		}
-	}
-	return nil
 }
 
 func createLogWriter(level, logFile string) (hclog.Logger, error) {

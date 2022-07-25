@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/ahdekkers/go-zipdir v0.1.2
 	github.com/gin-gonic/gin v1.7.7
+	github.com/hashicorp/go-hclog v1.2.1
 	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5
 	github.com/spf13/cobra v1.4.0
 	github.com/stretchr/testify v1.8.0
@@ -18,7 +19,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator/v10 v10.11.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/hashicorp/go-hclog v1.2.1 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
