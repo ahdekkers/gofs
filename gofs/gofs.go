@@ -268,7 +268,7 @@ func unzipToDir(dir string, zipData []byte) error {
 func createLogWriter(level, logFile string) (hclog.Logger, error) {
 	var file *os.File
 	if logFile != "" {
-		dir := logFile[:strings.LastIndex(logFile, "/")]
+		dir, _ := filepath.Split(logFile)
 		err := os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
 			return nil, fmt.Errorf("failed to make dirs '%s': %v", dir, err)
