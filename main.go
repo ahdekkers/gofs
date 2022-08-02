@@ -36,6 +36,8 @@ func main() {
 		"The level for log output")
 	flags.StringVar(&opts.LogFile, "logFile", "",
 		"A file to write log output to, as well as stdOut")
+	flags.BoolVar(&opts.NoCache, "noCache", false,
+		"Whether or not to cache returned data for future requests")
 
 	err := rootCmd.MarkFlagRequired("rootDir")
 	if err != nil {

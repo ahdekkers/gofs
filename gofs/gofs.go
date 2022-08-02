@@ -37,6 +37,7 @@ type Opts struct {
 	RootDir  string
 	LogLevel string
 	LogFile  string
+	NoCache  bool
 }
 
 type Server struct {
@@ -45,6 +46,7 @@ type Server struct {
 	logger  hclog.Logger
 	stopCh  chan int
 	cache   map[string][]byte
+	noCache bool
 }
 
 /*
@@ -66,6 +68,7 @@ func Create(opts Opts) (*Server, error) {
 		logger:  logger,
 		stopCh:  make(chan int),
 		cache:   make(map[string][]byte),
+		noCache: opts.NoCache,
 	}
 
 	router := gin.Default()
@@ -111,11 +114,13 @@ func (s *Server) getFile(ctx *gin.Context) {
 	path := filepath.Join(s.rootDir, fileAddr)
 	s.logger.Debug("Received get file request", "addr", fileAddr, "fullPath", path)
 
-	data, found := s.cache[path]
-	if found {
-		s.logger.Info("Retrieved file data from cache")
-		ctx.Data(http.StatusOK, "application/zip", data)
-		return
+	if !s.noCache {
+		data, found := s.cache[path]
+		if found {
+			s.logger.Info("Retrieved file data from cache")
+			ctx.Data(http.StatusOK, "application/zip", data)
+			return
+		}
 	}
 
 	inf, err := os.Stat(path)
@@ -125,6 +130,7 @@ func (s *Server) getFile(ctx *gin.Context) {
 		return
 	}
 
+	var data []byte
 	if inf.IsDir() {
 		data, err = zipdir.ZipToBytes(path)
 		if err != nil {
@@ -134,18 +140,19 @@ func (s *Server) getFile(ctx *gin.Context) {
 		}
 
 		s.logger.Info("Successfully returned directory as zip", "path", path)
-		s.cache[path] = data
 		ctx.Data(http.StatusOK, "application/zip", data)
 	} else {
-		fileData, err := os.ReadFile(path)
+		data, err = os.ReadFile(path)
 		if err != nil {
 			ctx.String(http.StatusBadRequest, "Failed to read file at '%s': %v", path, err)
 			return
 		}
 
 		s.logger.Info("Successfully returned file as raw data", "path", path)
-		s.cache[path] = fileData
-		ctx.Data(http.StatusOK, "raw", fileData)
+		ctx.Data(http.StatusOK, "raw", data)
+	}
+	if !s.noCache {
+		s.cache[path] = data
 	}
 }
 
