@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ahdekkers/go-zipdir/zipdir"
 	"github.com/gin-gonic/gin"
 	"github.com/hashicorp/go-hclog"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -132,25 +131,19 @@ func (s *Server) getFile(ctx *gin.Context) {
 
 	var data []byte
 	if inf.IsDir() {
-		data, err = zipdir.ZipToBytes(path)
-		if err != nil {
-			s.logger.Warn("Failed to zip dir", "error", err, "path", path)
-			ctx.String(http.StatusBadRequest, "Failed to zip dir '%s': %v", path, err)
-			return
-		}
-
-		s.logger.Info("Successfully returned directory as zip", "path", path)
-		ctx.Data(http.StatusOK, "application/zip", data)
-	} else {
-		data, err = os.ReadFile(path)
-		if err != nil {
-			ctx.String(http.StatusBadRequest, "Failed to read file at '%s': %v", path, err)
-			return
-		}
-
-		s.logger.Info("Successfully returned file as raw data", "path", path)
-		ctx.Data(http.StatusOK, "raw", data)
+		s.logger.Warn("Directory requested", "path", path)
+		ctx.String(http.StatusBadRequest, "Requested resource is a directory")
+		return
 	}
+
+	data, err = os.ReadFile(path)
+	if err != nil {
+		ctx.String(http.StatusBadRequest, "Failed to read file at '%s': %v", path, err)
+		return
+	}
+
+	ctx.Data(http.StatusOK, "application/octet-stream", data)
+	s.logger.Info("Successfully returned file as application/octet-stream", "path", path)
 	if !s.noCache {
 		s.cache[path] = data
 	}
@@ -168,46 +161,44 @@ func (s *Server) uploadFile(ctx *gin.Context) {
 	s.logger.Debug("Received upload file request",
 		"content-type", contentType, "destAddr", destAddr, "fullPath", path)
 
-	reqData, err := ioutil.ReadAll(ctx.Request.Body)
+	reqData, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
 		s.logger.Warn("Failed to read upload file request data", "error", err)
 		ctx.String(http.StatusBadRequest, "Failed to read request data: %v", err)
 		return
 	}
 
-	if contentType == "application/zip" {
-		err = zipdir.UnzipToDir(path, reqData)
-		if err != nil {
-			s.logger.Warn("Failed to unzip upload file request data", "error", err)
-			ctx.String(http.StatusBadRequest, err.Error())
-		}
-	} else {
-		dir := path[:strings.LastIndex(path, "/")]
-		err = os.MkdirAll(dir, os.ModePerm)
-		if err != nil {
-			s.logger.Warn("Failed to create dirs", "error", err, "dirs", dir)
-			ctx.String(http.StatusBadRequest, "Failed to make dirs '%s': %v", dir, err)
-			return
+	if contentType != "application/octet-stream" {
+		s.logger.Warn("Invalid content type received", "content-type", contentType)
+		ctx.String(http.StatusBadRequest, "Invalid content type '%s': expected application/octet-stream", contentType)
+		return
+	}
+
+	dir := path[:strings.LastIndex(path, "/")]
+	err = os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		s.logger.Warn("Failed to create dirs", "error", err, "dirs", dir)
+		ctx.String(http.StatusBadRequest, "Failed to make dirs '%s': %v", dir, err)
+		return
+	}
+
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0777)
+	if err != nil {
+		if file != nil {
+			file.Close()
 		}
 
-		file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_TRUNC, os.ModePerm)
-		if err != nil {
-			if file != nil {
-				file.Close()
-			}
+		s.logger.Warn("Failed to create/truncate file during upload file request", "file", path, "error", err)
+		ctx.String(http.StatusBadRequest, "Failed to open file '%s': %v", path, err)
+		return
+	}
 
-			s.logger.Warn("Failed to create/truncate file during upload file request", "file", path, "error", err)
-			ctx.String(http.StatusBadRequest, "Failed to open file '%s': %v", path, err)
-			return
-		}
-
-		_, err = file.Write(reqData)
-		file.Close()
-		if err != nil {
-			s.logger.Warn("Failed to write file data during upload file request", "error", err, "file", path)
-			ctx.String(http.StatusBadRequest, "Failed to write data to file '%s': %v", path, err)
-			return
-		}
+	_, err = file.Write(reqData)
+	file.Close()
+	if err != nil {
+		s.logger.Warn("Failed to write file data during upload file request", "error", err, "file", path)
+		ctx.String(http.StatusBadRequest, "Failed to write data to file '%s': %v", path, err)
+		return
 	}
 
 	s.logger.Info("File data successfully uploaded", "path", path)
