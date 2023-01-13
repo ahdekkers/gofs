@@ -38,6 +38,8 @@ func main() {
 		"A file to write log output to, as well as stdOut")
 	flags.BoolVar(&opts.NoCache, "noCache", false,
 		"Whether or not to cache returned data for future requests")
+	flags.BoolVar(&opts.NoDirectories, "noDirs", true,
+		"Whether to allow returning directories as zip data or not")
 
 	err := rootCmd.MarkFlagRequired("rootDir")
 	if err != nil {

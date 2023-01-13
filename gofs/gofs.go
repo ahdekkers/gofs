@@ -7,7 +7,7 @@ import (
 	"github.com/ahdekkers/go-zipdir/zipdir"
 	"github.com/gin-gonic/gin"
 	"github.com/hashicorp/go-hclog"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -32,12 +32,13 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 }
 
 type Opts struct {
-	Addr     string
-	Port     int
-	RootDir  string
-	LogLevel string
-	LogFile  string
-	NoCache  bool
+	Addr          string
+	Port          int
+	RootDir       string
+	LogLevel      string
+	LogFile       string
+	NoCache       bool
+	NoDirectories bool
 }
 
 type Server struct {
@@ -47,6 +48,7 @@ type Server struct {
 	stopCh  chan int
 	cache   map[string][]byte
 	noCache bool
+	noDirs  bool
 }
 
 /*
@@ -69,6 +71,7 @@ func Create(opts Opts) (*Server, error) {
 		stopCh:  make(chan int),
 		cache:   make(map[string][]byte),
 		noCache: opts.NoCache,
+		noDirs:  opts.NoDirectories,
 	}
 
 	router := gin.Default()
@@ -132,6 +135,12 @@ func (s *Server) getFile(ctx *gin.Context) {
 
 	var data []byte
 	if inf.IsDir() {
+		if s.noDirs {
+			ctx.String(http.StatusBadRequest, "Path '%s' is a directory and noDirs flag is true", path)
+			s.logger.Warn("Path '%s' is a directory and noDies flag is true", "path", path)
+			return
+		}
+
 		data, err = zipdir.ZipToBytes(path)
 		if err != nil {
 			s.logger.Warn("Failed to zip dir", "error", err, "path", path)
@@ -168,7 +177,7 @@ func (s *Server) uploadFile(ctx *gin.Context) {
 	s.logger.Debug("Received upload file request",
 		"content-type", contentType, "destAddr", destAddr, "fullPath", path)
 
-	reqData, err := ioutil.ReadAll(ctx.Request.Body)
+	reqData, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
 		s.logger.Warn("Failed to read upload file request data", "error", err)
 		ctx.String(http.StatusBadRequest, "Failed to read request data: %v", err)
@@ -176,6 +185,12 @@ func (s *Server) uploadFile(ctx *gin.Context) {
 	}
 
 	if contentType == "application/zip" {
+		if s.noDirs {
+			ctx.String(http.StatusBadRequest, "Content type is application/zip but noDirs flag is set to true")
+			s.logger.Warn("Content type is application/zip but noDirs flag is set to true")
+			return
+		}
+
 		err = zipdir.UnzipToDir(path, reqData)
 		if err != nil {
 			s.logger.Warn("Failed to unzip upload file request data", "error", err)
