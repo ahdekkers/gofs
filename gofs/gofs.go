@@ -137,7 +137,7 @@ func (s *Server) getFile(ctx *gin.Context) {
 	if inf.IsDir() {
 		if s.noDirs {
 			ctx.String(http.StatusBadRequest, "Path '%s' is a directory and noDirs flag is true", path)
-			s.logger.Warn("Path '%s' is a directory and noDies flag is true", "path", path)
+			s.logger.Warn("Path '%s' is a directory and noDirs flag is true", "path", path)
 			return
 		}
 
